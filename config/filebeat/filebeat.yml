@@ -1,0 +1,171 @@
+# Filebeat Configuration for SIEM System
+
+# Global settings
+name: "siem-filebeat"
+tags: ["siem", "security", "logs"]
+
+# Filebeat inputs
+filebeat.inputs:
+
+# Linux authentication logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/auth.log
+    - /var/log/secure
+  fields:
+    log_type: auth
+    environment: production
+  fields_under_root: false
+  multiline.pattern: '^\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
+  multiline.negate: true
+  multiline.match: after
+  exclude_lines: ['^$']
+  
+# System logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/syslog
+    - /var/log/messages
+  fields:
+    log_type: system
+    environment: production
+  fields_under_root: false
+  multiline.pattern: '^\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
+  multiline.negate: true
+  multiline.match: after
+  exclude_lines: ['^$']
+
+# Audit logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/audit/audit.log
+  fields:
+    log_type: audit
+    environment: production
+  fields_under_root: false
+  exclude_lines: ['^$']
+
+# Apache/Nginx access logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/apache2/access.log
+    - /var/log/nginx/access.log
+    - /var/log/httpd/access_log
+  fields:
+    log_type: apache
+    environment: production
+  fields_under_root: false
+  exclude_lines: ['^$']
+
+# Apache/Nginx error logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/apache2/error.log
+    - /var/log/nginx/error.log
+    - /var/log/httpd/error_log
+  fields:
+    log_type: apache_error
+    environment: production
+  fields_under_root: false
+  multiline.pattern: '^\[\w{3}\s+\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
+  multiline.negate: true
+  multiline.match: after
+  exclude_lines: ['^$']
+
+# Docker container logs
+- type: container
+  enabled: true
+  paths:
+    - /var/lib/docker/containers/*/*.log
+  fields:
+    log_type: docker
+    environment: production
+  fields_under_root: false
+
+# Filebeat modules
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: true
+  reload.period: 10s
+
+# Processors
+processors:
+- add_host_metadata:
+    when.not.contains.tags: forwarded
+- add_docker_metadata: ~
+- add_kubernetes_metadata: ~
+
+# Output configuration
+output.logstash:
+  hosts: ["logstash:5044"]
+  ssl.enabled: true
+  ssl.certificate_authorities: ["config/certs/ca/ca.crt"]
+  ssl.certificate: "config/certs/filebeat/filebeat.crt"
+  ssl.key: "config/certs/filebeat/filebeat.key"
+  ssl.verification_mode: full
+
+# Alternative: Direct to Elasticsearch (uncomment if not using Logstash)
+# output.elasticsearch:
+#   hosts: ["https://elasticsearch:9200"]
+#   username: "elastic"
+#   password: "changeme"
+#   ssl.enabled: true
+#   ssl.certificate_authorities: ["config/certs/ca/ca.crt"]
+#   ssl.verification_mode: full
+#   index: "siem-filebeat-%{+yyyy.MM.dd}"
+
+# Logging configuration
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
+
+# Monitoring
+monitoring.enabled: true
+monitoring.elasticsearch:
+  hosts: ["https://elasticsearch:9200"]
+  username: "elastic"
+  password: "changeme"
+  ssl.enabled: true
+  ssl.certificate_authorities: ["config/certs/ca/ca.crt"]
+
+# Setup configuration
+setup.template.enabled: true
+setup.template.name: "siem-filebeat"
+setup.template.pattern: "siem-filebeat-*"
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+
+# ILM Policy
+setup.ilm.enabled: true
+setup.ilm.rollover_alias: "siem-filebeat"
+setup.ilm.pattern: "{now/d}-000001"
+setup.ilm.policy: "siem-filebeat-policy"
+
+# Kibana configuration for dashboards
+setup.kibana:
+  host: "https://kibana:5601"
+  username: "elastic"
+  password: "changeme"
+  ssl.enabled: true
+  ssl.certificate_authorities: ["config/certs/ca/ca.crt"]
+
+# Queue settings
+queue.mem:
+  events: 4096
+  flush.min_events: 512
+  flush.timeout: 5s
+
+# HTTP endpoint for health checks
+http.enabled: true
+http.host: "0.0.0.0"
+http.port: 5066

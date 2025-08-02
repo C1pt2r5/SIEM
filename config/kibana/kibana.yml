@@ -1,0 +1,73 @@
+server.name: "siem-kibana"
+server.host: "0.0.0.0"
+server.port: 5601
+
+# Elasticsearch configuration
+elasticsearch.hosts: ["https://elasticsearch:9200"]
+elasticsearch.username: "elastic"
+elasticsearch.password: "changeme"
+elasticsearch.ssl.certificateAuthorities: ["config/certs/ca/ca.crt"]
+
+# SSL Configuration
+server.ssl.enabled: true
+server.ssl.key: "config/certs/kibana/kibana.key"
+server.ssl.certificate: "config/certs/kibana/kibana.crt"
+
+# Security settings
+xpack.security.encryptionKey: "a7a6311933d3503b89bc2dbc36572c01a6b9c9a0826e2f4f2f5b1a8b9c9d9e9f"
+xpack.encryptedSavedObjects.encryptionKey: "a7a6311933d3503b89bc2dbc36572c01a6b9c9a0826e2f4f2f5b1a8b9c9d9e9f"
+xpack.reporting.encryptionKey: "a7a6311933d3503b89bc2dbc36572c01a6b9c9a0826e2f4f2f5b1a8b9c9d9e9f"
+
+# Monitoring
+monitoring.ui.container.elasticsearch.enabled: true
+
+# Logging
+logging.appenders.file.type: file
+logging.appenders.file.fileName: /usr/share/kibana/logs/kibana.log
+logging.appenders.file.layout.type: json
+logging.root.appenders: [default, file]
+logging.root.level: info
+
+# Maps
+map.includeElasticMapsService: true
+
+# Telemetry
+telemetry.enabled: false
+telemetry.optIn: false
+
+# Session timeout (30 minutes)
+xpack.security.session.idleTimeout: "30m"
+
+# Default index patterns
+kibana.defaultAppId: "dashboard"
+
+# SIEM specific settings
+xpack.siem.enabled: true
+xpack.siem.signalsIndex: ".siem-signals-default"
+
+# Machine Learning
+xpack.ml.enabled: true
+
+# Alerting
+xpack.alerting.enabled: true
+xpack.actions.enabled: true
+
+# Fleet and Elastic Agent
+xpack.fleet.enabled: true
+xpack.fleet.agents.elasticsearch.hosts: ["https://elasticsearch:9200"]
+xpack.fleet.agents.elasticsearch.ca_sha256: ""
+
+# Saved objects encryption
+xpack.encryptedSavedObjects.keyRotation.decryptionOnlyKeys: []
+
+# Reporting
+xpack.reporting.capture.browser.chromium.disableSandbox: true
+
+# Canvas
+xpack.canvas.enabled: true
+
+# Graph
+xpack.graph.enabled: true
+
+# Upgrade assistant
+xpack.upgrade_assistant.enabled: true

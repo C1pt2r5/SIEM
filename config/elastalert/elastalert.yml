@@ -1,0 +1,121 @@
+# ElastAlert Configuration for SIEM System
+
+# Elasticsearch connection settings
+es_host: elasticsearch
+es_port: 9200
+es_username: elastic
+es_password: changeme
+use_ssl: true
+ca_certs: /opt/elastalert/config/certs/ca/ca.crt
+verify_certs: true
+
+# ElastAlert settings
+rules_folder: /opt/elastalert/rules
+run_every:
+  minutes: 1
+
+buffer_time:
+  minutes: 15
+
+# Elasticsearch index for ElastAlert metadata
+writeback_index: elastalert_status
+writeback_alias: elastalert_alerts
+
+# Alert index for storing alerts
+alert_time_limit:
+  days: 2
+
+# Logging
+logging:
+  version: 1
+  incremental: false
+  disable_existing_loggers: false
+  formatters:
+    logline:
+      format: '%(asctime)s %(levelname)s %(name)s %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: logline
+      level: INFO
+      stream: ext://sys.stdout
+    file:
+      class: logging.handlers.RotatingFileHandler
+      formatter: logline
+      level: INFO
+      filename: /opt/elastalert/logs/elastalert.log
+      maxBytes: 10485760
+      backupCount: 5
+  loggers:
+    elastalert:
+      level: INFO
+      handlers: [console, file]
+      propagate: false
+    elasticsearch:
+      level: WARNING
+      handlers: [console, file]
+      propagate: false
+    requests:
+      level: WARNING
+      handlers: [console, file]
+      propagate: false
+  root:
+    level: INFO
+    handlers: [console, file]
+
+# Email settings (configure with your SMTP server)
+smtp_host: smtp.gmail.com
+smtp_port: 587
+smtp_ssl: false
+smtp_auth_file: /opt/elastalert/config/smtp_auth.yaml
+from_addr: siem-alerts@yourcompany.com
+
+# Slack settings (optional)
+slack_webhook_url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+slack_channel_override: "#security-alerts"
+slack_username_override: "SIEM-Bot"
+
+# Jira settings (optional)
+jira_server: "https://yourcompany.atlassian.net"
+jira_project: "SEC"
+jira_issue_type: "Bug"
+
+# Custom alert enhancements
+alert_text: |
+  SIEM Alert: {0}
+  
+  Rule: {1}
+  Time: {2}
+  
+  Details:
+  {3}
+  
+  Investigation Link: https://kibana:5601/app/discover#/?_g=(time:(from:'{4}',to:'{5}'))
+
+alert_text_args:
+  - rule.name
+  - rule.name
+  - "@timestamp"
+  - match_body
+  - "@timestamp"
+  - "@timestamp"
+
+# Silence alerts for duplicate events
+realert:
+  minutes: 5
+
+# Maximum number of alerts to send per execution
+max_query_size: 10000
+
+# Scroll settings for large result sets
+scroll_size: 10000
+
+# Query delay to account for log ingestion lag
+query_delay:
+  minutes: 2
+
+# Timezone
+use_local_time: false
+
+# Disable SSL warnings
+disable_ssl_warnings: true

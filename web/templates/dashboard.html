@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}SIEM Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="h3 mb-0">Security Dashboard</h1>
+        <p class="text-muted">Real-time security monitoring and threat detection</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-number text-primary">{{ stats.total_events or 0 | int }}</div>
+            <div class="stat-label">Total Events</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-number text-warning">{{ stats.alerts_24h or 0 }}</div>
+            <div class="stat-label">Alerts (24h)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-number text-info">{{ stats.recent_events_1h or 0 }}</div>
+            <div class="stat-label">Events (1h)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-number text-success">{{ stats.total_size_gb or 0 }}</div>
+            <div class="stat-label">Storage (GB)</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent Alerts -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-exclamation-triangle me-2"></i>Recent Alerts
+            </div>
+            <div class="card-body">
+                {% if recent_alerts %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Rule</th>
+                                    <th>Severity</th>
+                                    <th>Matches</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alert in recent_alerts %}
+                                <tr class="alert-{{ alert.severity }}">
+                                    <td>{{ alert.timestamp[:19] if alert.timestamp else 'N/A' }}</td>
+                                    <td>{{ alert.rule_name }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if alert.severity == 'high' else 'warning' if alert.severity == 'medium' else 'success' }} severity-badge">
+                                            {{ alert.severity.upper() }}
+                                        </span>
+                                    </td>
+                                    <td>{{ alert.matches }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center">
+                        <a href="{{ url_for('alerts') }}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-eye me-1"></i>View All Alerts
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-shield-alt fa-3x mb-3"></i>
+                        <p>No recent alerts</p>
+                        <small>Your system is secure</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Source IPs -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-globe me-2"></i>Top Source IPs (24h)
+            </div>
+            <div class="card-body">
+                {% if top_ips %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>Country</th>
+                                    <th>Events</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ip in top_ips %}
+                                <tr>
+                                    <td>
+                                        <code>{{ ip.ip }}</code>
+                                    </td>
+                                    <td>{{ ip.country }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ ip.count }}</span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-danger btn-sm" onclick="blockIP('{{ ip.ip }}')">
+                                            <i class="fas fa-ban"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-network-wired fa-3x mb-3"></i>
+                        <p>No IP activity data</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Authentication Failures Chart -->
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-user-times me-2"></i>Authentication Failures (24h)
+            </div>
+            <div class="card-body">
+                <canvas id="authFailuresChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Block IP Modal -->
+<div class="modal fade" id="blockIPModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Block IP Address</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="blockIPForm">
+                    <div class="mb-3">
+                        <label for="ipAddress" class="form-label">IP Address</label>
+                        <input type="text" class="form-control" id="ipAddress" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="blockReason" class="form-label">Reason</label>
+                        <input type="text" class="form-control" id="blockReason" placeholder="Suspicious activity" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmBlockIP()">
+                    <i class="fas fa-ban me-1"></i>Block IP
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Authentication failures chart
+let authData;
+{% if auth_failures and auth_failures.hourly_data %}
+authData = {{ auth_failures.hourly_data | tojson | safe }};
+{% else %}
+authData = [];
+{% endif %}
+const ctx = document.getElementById('authFailuresChart').getContext('2d');
+
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: authData.map(item => new Date(item.key_as_string).toLocaleTimeString()),
+        datasets: [{
+            label: 'Failed Authentications',
+            data: authData.map(item => item.doc_count),
+            borderColor: 'rgb(231, 76, 60)',
+            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// Block IP functionality
+function blockIP(ip) {
+    document.getElementById('ipAddress').value = ip;
+    const modal = new bootstrap.Modal(document.getElementById('blockIPModal'));
+    modal.show();
+}
+
+function confirmBlockIP() {
+    const ip = document.getElementById('ipAddress').value;
+    const reason = document.getElementById('blockReason').value;
+    
+    if (!reason.trim()) {
+        alert('Please provide a reason for blocking this IP');
+        return;
+    }
+    
+    fetch('/api/block-ip', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            ip: ip,
+            reason: reason
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            alert('IP blocked successfully: ' + ip);
+            location.reload();
+        } else {
+            alert('Error blocking IP: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+    });
+    
+    bootstrap.Modal.getInstance(document.getElementById('blockIPModal')).hide();
+}
+
+// Auto-refresh dashboard every 30 seconds
+setInterval(() => {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,174 @@
+version: '3.8'
+
+services:
+  # Elasticsearch - Log storage and search engine
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: siem-elasticsearch
+    environment:
+      - node.name=elasticsearch
+      - cluster.name=siem-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/elasticsearch/elasticsearch.key
+      - xpack.security.http.ssl.certificate=certs/elasticsearch/elasticsearch.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/elasticsearch/elasticsearch.key
+      - xpack.security.transport.ssl.certificate=certs/elasticsearch/elasticsearch.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - ELASTIC_PASSWORD=changeme
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./certs:/usr/share/elasticsearch/config/certs:ro
+      - ./config/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    ports:
+      - "9200:9200"
+    networks:
+      - siem-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Logstash - Log processing and parsing
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: siem-logstash
+    environment:
+      - "LS_JAVA_OPTS=-Xmx512m -Xms512m"
+    volumes:
+      - ./config/logstash/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./config/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./certs:/usr/share/logstash/config/certs:ro
+    ports:
+      - "5044:5044"  # Beats input
+      - "5000:5000"  # TCP input
+      - "9600:9600"  # Logstash monitoring
+    networks:
+      - siem-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # Kibana - Visualization and dashboards
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: siem-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_KEY=config/certs/kibana/kibana.key
+      - SERVER_SSL_CERTIFICATE=config/certs/kibana/kibana.crt
+      - XPACK_SECURITY_ENCRYPTIONKEY=a7a6311933d3503b89bc2dbc36572c01a6b9c9a0826e2f4f2f5b1a8b9c9d9e9f
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=a7a6311933d3503b89bc2dbc36572c01a6b9c9a0826e2f4f2f5b1a8b9c9d9e9f
+      - XPACK_REPORTING_ENCRYPTIONKEY=a7a6311933d3503b89bc2dbc36572c01a6b9c9a0826e2f4f2f5b1a8b9c9d9e9f
+    volumes:
+      - ./config/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+      - ./certs:/usr/share/kibana/config/certs:ro
+      - ./dashboards:/usr/share/kibana/dashboards:ro
+    ports:
+      - "5601:5601"
+    networks:
+      - siem-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ElastAlert - Threat detection and alerting
+  elastalert:
+    image: jertel/elastalert2:2.15.0
+    container_name: siem-elastalert
+    environment:
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - ELASTICSEARCH_USE_SSL=true
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme
+      - ELASTICSEARCH_CA_CERTS=/opt/elastalert/config/certs/ca/ca.crt
+    volumes:
+      - ./config/elastalert/elastalert.yml:/opt/elastalert/config.yml:ro
+      - ./rules:/opt/elastalert/rules:ro
+      - ./certs:/opt/elastalert/config/certs:ro
+    networks:
+      - siem-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # Filebeat - Log shipping agent (example configuration)
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: siem-filebeat
+    user: root
+    environment:
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme
+      - LOGSTASH_HOSTS=logstash:5044
+    volumes:
+      - ./config/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./certs:/usr/share/filebeat/config/certs:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - siem-network
+    depends_on:
+      - logstash
+
+  # SIEM Web Interface - Custom management interface
+  siem-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: siem-web-interface
+    environment:
+      - ELASTICSEARCH_URL=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme
+      - FLASK_ENV=production
+    volumes:
+      - ./certs:/app/certs:ro
+      - ./scripts:/app/scripts:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - siem-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # Redis - Caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: siem-redis
+    command: redis-server --requirepass siemredispass
+    volumes:
+      - redis_data:/data
+    networks:
+      - siem-network
+
+volumes:
+  elasticsearch_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  siem-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

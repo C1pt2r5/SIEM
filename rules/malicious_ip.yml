@@ -1,0 +1,209 @@
+# Malicious IP Detection Rule
+name: Known Malicious IP Activity
+type: blacklist
+index: siem-*
+
+# Blacklist of known malicious IPs (update regularly)
+blacklist:
+- "192.168.1.100"  # Example malicious IP
+- "10.0.0.50"      # Example malicious IP
+- "203.0.113.0/24" # Example malicious subnet
+
+# Compare against source IP field
+compare_key: source.ip
+
+# Alert configuration
+alert:
+- "email"
+- "slack"
+
+# Email settings
+email:
+- "security@yourcompany.com"
+email_subject: "SIEM Alert: Known Malicious IP Activity"
+email_body: |
+  Known Malicious IP Activity Detected!
+  
+  Malicious IP: {0}
+  Activity Type: {1}
+  Time: {2}
+  
+  Event Details:
+  - Action: {3}
+  - User: {4}
+  - Host: {5}
+  
+  Geographic Information:
+  - Country: {6}
+  - City: {7}
+  
+  Recommended Actions:
+  1. IMMEDIATELY block this IP at firewall level
+  2. Review all activity from this IP
+  3. Check for successful authentications
+  4. Scan affected systems for compromise
+  
+  Investigation Link: https://kibana:5601/app/discover#/?_g=(time:(from:'now-1h',to:'now'))&_a=(query:(query_string:(query:'source.ip:"{0}"')))
+
+email_body_args:
+- source.ip
+- event.category
+- "@timestamp"
+- event.action
+- user.name
+- host.name
+- source.geo.country_name
+- source.geo.city_name
+
+# Slack notification
+slack_title: "Malicious IP Alert"
+slack_text: |
+  :rotating_light: *Known Malicious IP Activity*
+  
+  *IP:* `{0}`
+  *Activity:* {1}
+  *Time:* {2}
+  *Location:* {3}, {4}
+  
+  *BLOCK IMMEDIATELY*
+  
+  *Investigate:* <https://kibana:5601/app/discover#/?_g=(time:(from:'now-1h',to:'now'))&_a=(query:(query_string:(query:'source.ip:"{0}"')))|View in Kibana>
+
+slack_text_args:
+- source.ip
+- event.category
+- "@timestamp"
+- source.geo.country_name
+- source.geo.city_name
+
+# Include raw documents in alert
+include:
+- source.ip
+- event.action
+- event.category
+- user.name
+- host.name
+- "@timestamp"
+- source.geo
+
+# No realert delay for malicious IPs
+realert:
+  minutes: 0
+
+# Metadata for automated response
+metadata:
+  severity: "critical"
+  category: "malicious_ip"
+  response_action: "block_ip"
+  confidence: 1.0
+
+---
+
+# Impossible Travel Detection
+name: Impossible Travel Detection
+type: frequency
+index: siem-auth-*
+
+# Look for successful logins from same user
+num_events: 2
+timeframe:
+  hours: 1
+
+# Filter for successful authentications with GeoIP data
+filter:
+- terms:
+    event.action: ["authentication_success", "logon_success"]
+- exists:
+    field: "source.geo.location"
+- exists:
+    field: "user.name"
+
+# Group by user
+query_key: user.name
+
+# Custom rule to calculate distance between locations
+# (This would require a custom ElastAlert module)
+alert:
+- "email"
+- "slack"
+
+# Email settings
+email:
+- "security@yourcompany.com"
+email_subject: "SIEM Alert: Impossible Travel Detected"
+email_body: |
+  Impossible Travel Pattern Detected!
+  
+  User: {0}
+  
+  Login Locations:
+  1. {1}, {2} at {3}
+  2. {4}, {5} at {6}
+  
+  Time Difference: {7}
+  Estimated Distance: {8} km
+  
+  This pattern suggests:
+  - Account compromise
+  - Credential sharing
+  - VPN/Proxy usage
+  
+  Recommended Actions:
+  1. Immediately disable the user account
+  2. Force password reset
+  3. Review all recent activity
+  4. Contact the user to verify legitimacy
+  
+  Investigation Link: https://kibana:5601/app/discover#/?_g=(time:(from:'{3}',to:'{6}'))&_a=(query:(query_string:(query:'user.name:"{0}"')))
+
+email_body_args:
+- user.name
+- source.geo.city_name
+- source.geo.country_name
+- "@timestamp"
+- source.geo.city_name
+- source.geo.country_name
+- "@timestamp"
+- time_diff
+- distance
+
+# Slack notification
+slack_title: "Impossible Travel Alert"
+slack_text: |
+  :airplane: *Impossible Travel Detected*
+  
+  *User:* `{0}`
+  *Locations:* {1}, {2} → {3}, {4}
+  *Time:* {5} → {6}
+  
+  *ACCOUNT COMPROMISE SUSPECTED*
+  
+  *Investigate:* <https://kibana:5601/app/discover#/?_g=(time:(from:'{5}',to:'{6}'))&_a=(query:(query_string:(query:'user.name:"{0}"')))|View in Kibana>
+
+slack_text_args:
+- user.name
+- source.geo.city_name
+- source.geo.country_name
+- source.geo.city_name
+- source.geo.country_name
+- "@timestamp"
+- "@timestamp"
+
+# Include location data
+include:
+- user.name
+- source.ip
+- source.geo
+- "@timestamp"
+- event.action
+
+# Immediate realert
+realert:
+  minutes: 0
+
+# Metadata for automated response
+metadata:
+  severity: "high"
+  category: "impossible_travel"
+  response_action: "disable_account"
+  confidence: 0.9

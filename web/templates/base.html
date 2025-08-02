@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SIEM Dashboard{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --dark-color: #34495e;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color), var(--dark-color));
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        .sidebar {
+            background: white;
+            min-height: calc(100vh - 56px);
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar .nav-link {
+            color: var(--dark-color);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 2px 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar .nav-link:hover {
+            background-color: var(--secondary-color);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .sidebar .nav-link.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 12px 12px 0 0 !important;
+            font-weight: 600;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .alert-high { border-left: 4px solid var(--danger-color); }
+        .alert-medium { border-left: 4px solid var(--warning-color); }
+        .alert-low { border-left: 4px solid var(--success-color); }
+        
+        .severity-badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(52, 73, 94, 0.05);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 8px;
+            padding: 8px 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .search-box {
+            border-radius: 25px;
+            border: 2px solid #e9ecef;
+            padding: 10px 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .search-box:focus {
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 0.2rem rgba(52, 144, 220, 0.25);
+        }
+        
+        .status-online { color: var(--success-color); }
+        .status-offline { color: var(--danger-color); }
+        .status-warning { color: var(--warning-color); }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px 0;
+            margin-top: 50px;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="fas fa-shield-alt me-2"></i>SIEM Dashboard
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="system-status">
+                            <i class="fas fa-circle status-online"></i> System Online
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link">
+                            <i class="fas fa-clock me-1"></i>
+                            <span id="current-time"></span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-2 sidebar">
+                <nav class="nav flex-column py-3">
+                    <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                        <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                    </a>
+                    <a class="nav-link {% if request.endpoint == 'alerts' %}active{% endif %}" href="{{ url_for('alerts') }}">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Alerts
+                    </a>
+                    <a class="nav-link {% if request.endpoint == 'search' %}active{% endif %}" href="{{ url_for('search') }}">
+                        <i class="fas fa-search me-2"></i>Search Logs
+                    </a>
+                    <a class="nav-link {% if request.endpoint == 'blocked_ips' %}active{% endif %}" href="{{ url_for('blocked_ips') }}">
+                        <i class="fas fa-ban me-2"></i>Blocked IPs
+                    </a>
+                    <a class="nav-link" href="https://kibana:5601" target="_blank">
+                        <i class="fas fa-chart-bar me-2"></i>Kibana
+                    </a>
+                    <a class="nav-link" href="#" onclick="showSystemInfo()">
+                        <i class="fas fa-info-circle me-2"></i>System Info
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-10">
+                <div class="container-fluid py-4">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Info Modal -->
+    <div class="modal fade" id="systemInfoModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">System Information</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="system-info-content">
+                    <div class="text-center">
+                        <div class="loading"></div>
+                        <p>Loading system information...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString();
+        }
+        
+        // Check system status
+        function checkSystemStatus() {
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    const statusElement = document.getElementById('system-status');
+                    const icon = statusElement.querySelector('i');
+                    
+                    if (data.status === 'healthy') {
+                        icon.className = 'fas fa-circle status-online';
+                        statusElement.innerHTML = '<i class="fas fa-circle status-online"></i> System Online';
+                    } else {
+                        icon.className = 'fas fa-circle status-offline';
+                        statusElement.innerHTML = '<i class="fas fa-circle status-offline"></i> System Issues';
+                    }
+                })
+                .catch(error => {
+                    const statusElement = document.getElementById('system-status');
+                    statusElement.innerHTML = '<i class="fas fa-circle status-offline"></i> Connection Error';
+                });
+        }
+        
+        // Show system info modal
+        function showSystemInfo() {
+            const modal = new bootstrap.Modal(document.getElementById('systemInfoModal'));
+            modal.show();
+            
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('system-info-content').innerHTML = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Storage</h6>
+                                <p><strong>Total Events:</strong> ${data.total_events?.toLocaleString() || 'N/A'}</p>
+                                <p><strong>Total Size:</strong> ${data.total_size_gb || 'N/A'} GB</p>
+                                <p><strong>Indices:</strong> ${data.indices_count || 'N/A'}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Activity</h6>
+                                <p><strong>Events (1h):</strong> ${data.recent_events_1h?.toLocaleString() || 'N/A'}</p>
+                                <p><strong>Alerts (24h):</strong> ${data.alerts_24h?.toLocaleString() || 'N/A'}</p>
+                            </div>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    document.getElementById('system-info-content').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Error loading system information: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+        
+        // Initialize
+        updateTime();
+        checkSystemStatus();
+        
+        // Update time every second
+        setInterval(updateTime, 1000);
+        
+        // Check system status every 30 seconds
+        setInterval(checkSystemStatus, 30000);
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

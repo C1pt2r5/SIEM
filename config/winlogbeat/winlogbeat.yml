@@ -1,0 +1,71 @@
+# Winlogbeat Configuration for SIEM System
+
+# Global settings
+name: "siem-winlogbeat"
+tags: ["siem", "security", "windows"]
+
+# Windows Event Log inputs
+winlogbeat.event_logs:
+
+# Security Events
+- name: Security
+  event_id: 4624, 4625, 4648, 4672, 4720, 4722, 4724, 4728, 4732, 4756
+  fields:
+    log_type: wineventlog
+    category: security
+  fields_under_root: false
+
+# System Events  
+- name: System
+  event_id: 1074, 6005, 6006, 6008, 6013
+  fields:
+    log_type: wineventlog
+    category: system
+  fields_under_root: false
+
+# Application Events
+- name: Application
+  event_id: 1000, 1001, 1002
+  fields:
+    log_type: wineventlog
+    category: application
+  fields_under_root: false
+
+# PowerShell Events
+- name: Microsoft-Windows-PowerShell/Operational
+  event_id: 4103, 4104, 4105, 4106
+  fields:
+    log_type: wineventlog
+    category: powershell
+  fields_under_root: false
+
+# Windows Defender
+- name: Microsoft-Windows-Windows Defender/Operational
+  fields:
+    log_type: wineventlog
+    category: antivirus
+  fields_under_root: false
+
+# Processors
+processors:
+- add_host_metadata:
+    when.not.contains.tags: forwarded
+
+# Output to Logstash
+output.logstash:
+  hosts: ["logstash:5044"]
+  ssl.enabled: true
+  ssl.certificate_authorities: ["config/certs/ca/ca.crt"]
+  ssl.certificate: "config/certs/winlogbeat/winlogbeat.crt"
+  ssl.key: "config/certs/winlogbeat/winlogbeat.key"
+
+# Logging
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: C:\ProgramData\Elastic\Beats\winlogbeat\logs
+  name: winlogbeat
+  keepfiles: 7
+
+# Monitoring
+monitoring.enabled: true

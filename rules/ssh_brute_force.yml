@@ -1,0 +1,100 @@
+# SSH Brute Force Detection Rule
+name: SSH Brute Force Attack
+type: frequency
+index: siem-auth-*
+
+# Trigger when 5 or more failed SSH attempts from same IP in 5 minutes
+num_events: 5
+timeframe:
+  minutes: 5
+
+# Filter for SSH authentication failures
+filter:
+- terms:
+    event.action: ["authentication_failure"]
+- term:
+    program: "sshd"
+- exists:
+    field: "source.ip"
+
+# Group by source IP
+query_key: source.ip
+
+# Alert configuration
+alert:
+- "email"
+- "slack"
+
+# Email settings
+email:
+- "security@yourcompany.com"
+email_subject: "SIEM Alert: SSH Brute Force Attack Detected"
+email_body: |
+  SSH Brute Force Attack Detected!
+  
+  Source IP: {0}
+  Failed Attempts: {1}
+  Time Range: {2} to {3}
+  
+  Targeted Users:
+  {4}
+  
+  Recommended Actions:
+  1. Block the source IP: {0}
+  2. Review authentication logs
+  3. Check for successful logins from this IP
+  
+  Investigation Link: https://kibana:5601/app/discover#/?_g=(time:(from:'{2}',to:'{3}'))&_a=(query:(query_string:(query:'source.ip:"{0}"')))
+
+email_body_args:
+- source.ip
+- num_matches
+- "@timestamp"
+- "@timestamp"
+- user.name
+
+# Slack notification
+slack_title: "SSH Brute Force Attack"
+slack_text: |
+  :warning: *SSH Brute Force Attack Detected*
+  
+  *Source IP:* `{0}`
+  *Failed Attempts:* {1}
+  *Time:* {2}
+  
+  *Investigate:* <https://kibana:5601/app/discover#/?_g=(time:(from:'{2}',to:'{3}'))&_a=(query:(query_string:(query:'source.ip:"{0}"')))|View in Kibana>
+
+slack_text_args:
+- source.ip
+- num_matches
+- "@timestamp"
+- "@timestamp"
+
+# Include raw documents in alert
+include:
+- source.ip
+- user.name
+- "@timestamp"
+- event.action
+- source.geo.country_name
+- source.geo.city_name
+
+# Realert settings
+realert:
+  minutes: 30
+
+# Enhancement: Add GeoIP information
+enhancement:
+- "elastalert_modules.geoip_enhancement.GeoIPEnhancement"
+
+# Custom fields for automation
+alert_subject: "SSH Brute Force from {0}"
+alert_subject_args:
+- source.ip
+
+# Metadata for automated response
+metadata:
+  severity: "high"
+  category: "brute_force"
+  response_action: "block_ip"
+  confidence: 0.9

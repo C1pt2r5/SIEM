@@ -1,0 +1,52 @@
+cluster.name: "siem-cluster"
+node.name: "siem-node-1"
+
+# Network settings
+network.host: 0.0.0.0
+http.port: 9200
+
+# Discovery settings
+discovery.type: single-node
+
+# Security settings
+xpack.security.enabled: true
+xpack.security.http.ssl:
+  enabled: true
+  key: certs/elasticsearch/elasticsearch.key
+  certificate: certs/elasticsearch/elasticsearch.crt
+  certificate_authorities: certs/ca/ca.crt
+
+xpack.security.transport.ssl:
+  enabled: true
+  key: certs/elasticsearch/elasticsearch.key
+  certificate: certs/elasticsearch/elasticsearch.crt
+  certificate_authorities: certs/ca/ca.crt
+
+# Index lifecycle management
+xpack.ilm.enabled: true
+
+# Index templates for SIEM data
+action.auto_create_index: "+siem-*,+.kibana*,+.security*,+.monitoring*,+.watches*,+.triggered_watches*,+.watcher-history*,+.ml*"
+
+# Memory settings
+bootstrap.memory_lock: true
+
+# Index settings for security logs
+index.number_of_shards: 1
+index.number_of_replicas: 0
+
+# Audit logging
+xpack.security.audit.enabled: true
+xpack.security.audit.logfile.events.include: 
+  - access_granted
+  - access_denied
+  - anonymous_access_denied
+  - authentication_failed
+  - connection_granted
+  - connection_denied
+  - tampered_request
+  - run_as_granted
+  - run_as_denied
+
+# Monitoring
+xpack.monitoring.collection.enabled: true

@@ -1,0 +1,193 @@
+# Privilege Escalation Detection Rule
+name: Suspicious Privilege Escalation
+type: frequency
+index: siem-auth-*
+
+# Trigger on multiple sudo commands from same user in short time
+num_events: 10
+timeframe:
+  minutes: 10
+
+# Filter for sudo commands
+filter:
+- term:
+    event.action: "privilege_escalation"
+- term:
+    program: "sudo"
+- exists:
+    field: "user.name"
+
+# Group by user
+query_key: user.name
+
+# Alert configuration
+alert:
+- "email"
+- "slack"
+
+# Email settings
+email:
+- "security@yourcompany.com"
+email_subject: "SIEM Alert: Suspicious Privilege Escalation Activity"
+email_body: |
+  Suspicious Privilege Escalation Detected!
+  
+  User: {0}
+  Sudo Commands: {1}
+  Time Range: {2} to {3}
+  
+  Commands Executed:
+  {4}
+  
+  Target Users:
+  {5}
+  
+  Recommended Actions:
+  1. Review user activity and commands
+  2. Verify if activity is authorized
+  3. Check for signs of compromise
+  4. Consider temporary account suspension
+  
+  Investigation Link: https://kibana:5601/app/discover#/?_g=(time:(from:'{2}',to:'{3}'))&_a=(query:(query_string:(query:'user.name:"{0}" AND event.action:"privilege_escalation"')))
+
+email_body_args:
+- user.name
+- num_matches
+- "@timestamp"
+- "@timestamp"
+- process.command_line
+- target_user
+
+# Slack notification
+slack_title: "Privilege Escalation Alert"
+slack_text: |
+  :rotating_light: *Suspicious Privilege Escalation Activity*
+  
+  *User:* `{0}`
+  *Commands:* {1}
+  *Time:* {2}
+  
+  *Investigate:* <https://kibana:5601/app/discover#/?_g=(time:(from:'{2}',to:'{3}'))&_a=(query:(query_string:(query:'user.name:"{0}" AND event.action:"privilege_escalation"')))|View in Kibana>
+
+slack_text_args:
+- user.name
+- num_matches
+- "@timestamp"
+- "@timestamp"
+
+# Include raw documents in alert
+include:
+- user.name
+- target_user
+- process.command_line
+- working_directory
+- "@timestamp"
+- tty
+
+# Realert settings
+realert:
+  minutes: 60
+
+# Custom fields for automation
+alert_subject: "Privilege Escalation by {0}"
+alert_subject_args:
+- user.name
+
+# Metadata for automated response
+metadata:
+  severity: "medium"
+  category: "privilege_escalation"
+  response_action: "investigate"
+  confidence: 0.7
+
+---
+
+# High-Risk Privilege Escalation (Root Access)
+name: High-Risk Root Access
+type: any
+index: siem-auth-*
+
+# Filter for root access or sensitive commands
+filter:
+- bool:
+    should:
+    - term:
+        target_user: "root"
+    - terms:
+        process.command_line: ["/bin/bash", "/bin/sh", "passwd", "useradd", "userdel", "usermod"]
+    - match:
+        process.command_line: "rm -rf"
+- term:
+    event.action: "privilege_escalation"
+
+# Alert configuration
+alert:
+- "email"
+- "slack"
+
+# Email settings
+email:
+- "security@yourcompany.com"
+- "admin@yourcompany.com"
+email_subject: "CRITICAL: High-Risk Root Access Detected"
+email_body: |
+  CRITICAL: High-Risk Root Access Activity!
+  
+  User: {0}
+  Target User: {1}
+  Command: {2}
+  Time: {3}
+  Working Directory: {4}
+  TTY: {5}
+  
+  This activity requires immediate investigation!
+  
+  Investigation Link: https://kibana:5601/app/discover#/?_g=(time:(from:'{3}',to:'now'))&_a=(query:(query_string:(query:'user.name:"{0}"')))
+
+email_body_args:
+- user.name
+- target_user
+- process.command_line
+- "@timestamp"
+- working_directory
+- tty
+
+# Slack notification
+slack_title: "CRITICAL: High-Risk Root Access"
+slack_text: |
+  :fire: *CRITICAL: High-Risk Root Access Detected*
+  
+  *User:* `{0}`
+  *Target:* `{1}`
+  *Command:* `{2}`
+  *Time:* {3}
+  
+  *IMMEDIATE INVESTIGATION REQUIRED*
+  
+  *Investigate:* <https://kibana:5601/app/discover#/?_g=(time:(from:'{3}',to:'now'))&_a=(query:(query_string:(query:'user.name:"{0}"')))|View in Kibana>
+
+slack_text_args:
+- user.name
+- target_user
+- process.command_line
+- "@timestamp"
+
+# Include all fields
+include:
+- user.name
+- target_user
+- process.command_line
+- working_directory
+- tty
+- "@timestamp"
+
+# Immediate realert
+realert:
+  minutes: 5
+
+# Metadata for automated response
+metadata:
+  severity: "critical"
+  category: "privilege_escalation"
+  response_action: "immediate_investigation"
+  confidence: 0.95
